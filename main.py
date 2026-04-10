@@ -1,11 +1,8 @@
-# main.py
-
-
 import tkinter as tk
 from tkinter import ttk
 
 # Import custom modules
-from database import setup_database
+from database_mdb import setup_database
 from table_tab import TableTab
 
 class MainApp:
@@ -18,13 +15,13 @@ class MainApp:
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(fill=tk.BOTH, expand=True)
 
-        # Define Schema Structures (Table Name : Columns)
+        # Define Schema Structures (Table Name : Columns) - Corrected for ERD
         tables = {
             "Departments": ["DepartmentID", "DepartmentName", "Location"],
             "DeviceTypes": ["DeviceTypeID", "TypeName", "DepartmentID"],
             "Technician": ["TechnicianID", "FirstName", "LastName", "ContactNumber", "Email"],
-            "MaintenanceRecord": ["RecordID", "TechnicianID", "CompletionDate", "Notes"],
-            "Devices": ["DeviceID", "RecordID", "DeviceName", "DeviceTypeID", "SerialNumber", "PurchaseDate", "Status"]
+            "Devices": ["DeviceID", "DeviceName", "DeviceTypeID", "SerialNumber", "PurchaseDate", "Status"], # Corrected
+            "MaintenanceRecord": ["RecordID", "DeviceID", "TechnicianID", "CompletionDate", "Notes"] # Corrected
         }
 
         # Generate a tab for each table
@@ -33,10 +30,10 @@ class MainApp:
             self.notebook.add(tab, text=table_name)
 
 if __name__ == "__main__":
-    # Initialize the database before launching the GUI
+    # Initialize the database (MariaDB) before launching the GUI
     setup_database()
     
     # Launch the application
     root = tk.Tk()
     app = MainApp(root)
-    root.mainloop()
+    root.mainloop()     
