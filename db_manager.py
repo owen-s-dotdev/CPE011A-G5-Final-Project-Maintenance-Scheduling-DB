@@ -2,7 +2,7 @@ import mysql.connector
 from mysql.connector import Error
 
 # Database Configuration Variables
-DB_HOST = "localhost"
+DB_HOST = "127.0.0.1" # Using IP directly prevents IPv6 hanging
 DB_USER = "root"
 DB_PASS = ""
 DB_NAME = "maintenance_record_db"
@@ -18,10 +18,15 @@ class DatabaseManager:
                 host=DB_HOST,
                 user=DB_USER,
                 password=DB_PASS,
-                database=DB_NAME
+                database=DB_NAME,
+                connection_timeout=3, # Fails fast instead of hanging
+                use_pure=True
             )
             return True, "Connection successful."
-        except Error as e:
+        except Exception as e:
+            print(f"\n--- DATABASE CRASH LOG ---")
+            print(f"Reason: {e}")
+            print(f"--------------------------\n")
             return False, str(e)
 
     def disconnect(self):
