@@ -3,13 +3,13 @@ from mysql.connector import Error
 import json
 import os
 
+# Removed cursor.close() calls since we're now using 'with' context managers which handle that automatically.
+
 class DatabaseManager:
     def __init__(self):
         self.connection = None
         self.load_config()
 
-    
-    # Read credentials from JSON
     def load_config(self):
         """Reads database credentials from the external config folder."""
         config_path = os.path.join('config', 'config.json')
@@ -33,10 +33,11 @@ class DatabaseManager:
                 user=self.db_user,      
                 password=self.db_pass,   
                 database=self.db_name,
-                connection_timeout=3, # Fails fast instead of hanging
+                connection_timeout=3, 
                 use_pure=True
             )
             return True, "Connection successful."
+        
         except Exception as e:
             print(f"\n--- DATABASE CRASH LOG ---")
             print(f"Reason: {e}")
@@ -51,12 +52,13 @@ class DatabaseManager:
     def fetch_all(self, table_name):
         """Retrieves all records from a specified table."""
         try:
-            cursor = self.connection.cursor()
-            cursor.execute(f"SELECT * FROM {table_name}")
-            records = cursor.fetchall()
-            columns = [desc[0] for desc in cursor.description]
-            cursor.close()
-            return records, columns
+            # Added 'with' context manager
+            with self.connection.cursor() as cursor:
+                cursor.execute(f"SELECT * FROM {table_name}")
+                records = cursor.fetchall()
+                columns = [desc[0] for desc in cursor.description]
+                return records, columns
+            
         except Error as e:
             raise e
 
@@ -66,10 +68,11 @@ class DatabaseManager:
         col_str = ", ".join(columns)
         query = f"INSERT INTO {table_name} ({col_str}) VALUES ({placeholders})"
         try:
-            cursor = self.connection.cursor()
-            cursor.execute(query, values)
-            self.connection.commit()
-            cursor.close()
+            # Added 'with' context manager
+            with self.connection.cursor() as cursor:
+                cursor.execute(query, values)
+                self.connection.commit()
+            
         except Error as e:
             self.connection.rollback()
             raise e
@@ -79,10 +82,11 @@ class DatabaseManager:
         set_str = ", ".join([f"{col} = %s" for col in columns])
         query = f"UPDATE {table_name} SET {set_str} WHERE {pk_col} = %s"
         try:
-            cursor = self.connection.cursor()
-            cursor.execute(query, values + [pk_val])
-            self.connection.commit()
-            cursor.close()
+            # Added 'with' context manager
+            with self.connection.cursor() as cursor:
+                cursor.execute(query, values + [pk_val])
+                self.connection.commit()
+
         except Error as e:
             self.connection.rollback()
             raise e
@@ -91,10 +95,11 @@ class DatabaseManager:
         """Deletes a record based on its primary key."""
         query = f"DELETE FROM {table_name} WHERE {pk_col} = %s"
         try:
-            cursor = self.connection.cursor()
-            cursor.execute(query, (pk_val,))
-            self.connection.commit()
-            cursor.close()
+            
+            with self.connection.cursor() as cursor:
+                cursor.execute(query, (pk_val,))
+                self.connection.commit()
+            
         except Error as e:
             self.connection.rollback()
             raise e
