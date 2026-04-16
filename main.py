@@ -1,10 +1,12 @@
 import sys
 import re
+import os
+import json
 from datetime import datetime
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem,
-    QTabWidget, QMessageBox, QAbstractItemView, QHeaderView
+    QTabWidget, QMessageBox, QAbstractItemView, QHeaderView, QFileDialog
 )
 from PyQt6.QtCore import Qt
 from db_manager import DatabaseManager
@@ -66,6 +68,11 @@ class GenericTableTab(QWidget):
 
         btn_layout.addStretch() 
 
+        # JSON EXPORT
+        self.btn_export = QPushButton("Export to JSON")
+        self.btn_export.clicked.connect(self.export_to_json)
+        btn_layout.addWidget(self.btn_export)
+
         self.btn_refresh = QPushButton("Refresh")
         self.btn_refresh.clicked.connect(self.load_data)
         btn_layout.addWidget(self.btn_refresh)
@@ -95,6 +102,37 @@ class GenericTableTab(QWidget):
         # FIX: Removed the stretch code from here so it doesn't crash on an empty table!
         main_layout.addWidget(self.table_widget)
     
+
+    # Export Method to convert database records into JSON format
+
+    def export_to_json(self):
+        """Fetches current table data and saves it to a JSON file."""
+        try:
+            records, columns = self.db.fetch_all(self.table_name)
+            data_to_export = []
+            
+            for row in records:
+                row_dict = dict(zip(columns, row))
+                for key, value in row_dict.items():
+                    if value is not None:
+                        row_dict[key] = str(value)
+                data_to_export.append(row_dict)
+
+            file_path, _ = QFileDialog.getSaveFileName(
+                self, 
+                "Save JSON Backup", 
+                f"{self.table_name}_backup.json", 
+                "JSON Files (*.json)"
+            )
+
+            if file_path:
+                with open(file_path, 'w') as json_file:
+                    json.dump(data_to_export, json_file, indent=4)
+                QMessageBox.information(self, "Success", "Data exported successfully.")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Export Error", f"Failed to export data:\n{e}")
+
     def filter_table(self, text):
         """Dynamically filters the table rows based on the search query."""
         search_text = text.lower()
@@ -249,11 +287,27 @@ class MainApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Maintenance Record Management System (PyQt6)")
-        self.resize(900, 600)
+        # self.resize(900, 600)
+        self.load_settings()
 
         self.db = DatabaseManager()
         self.check_database_connection()
-
+    
+    # Method to load the settings.json
+    def load_settings(self):
+        """Loads window settings from the external JSON file."""
+        settings_path = os.path.join('config', 'settings.json')
+        try:
+            with open(settings_path, 'r') as file:
+                settings_data = json.load(file)
+                width = settings_data['window']['width']
+                height = settings_data['window']['height']
+                # Apply JSON settings
+                self.resize(width, height)
+        except Exception as e:
+            print(f"Warning: Failed to load settings.json. Using defaults. Error: {e}")
+            self.resize(900, 600) # Default fallback
+    
     def check_database_connection(self):
         # FIX: Added flush=True so Python doesn't hide the text if the UI crashes
         print("Attempting to connect to the database...", flush=True) 
@@ -275,24 +329,24 @@ class MainApp(QMainWindow):
         self.tab_widget = QTabWidget()
         self.setCentralWidget(self.tab_widget)
 
-        # MODIFIED BLOCK: The schemas dictionary has been completely 
-        # rewritten to align with the new MySQL Database standards.
+        schema_path = os.path.join('config', 'schema.json')
+        try:
+            with open(schema_path, 'r') as file:
+                schema_data = json.load(file)
 
-        schemas = {
-            "departments": ("department_id", [("department_name", False), ("department_location", False)]),
-            "technicians": ("technician_id", [("first_name", False), ("last_name", False), ("contact_number", False), ("email", False)]),
-            "device_types": ("device_type_id", [("device_type_name", False), ("department_id", False)]),
-            "maintenance_records": ("maintenance_record_id", [("technician_id", False), ("completion_date", True), ("maintenance_notes", False)]),
-            "devices": ("device_id", [("maintenance_record_id", False), ("device_name", False), ("device_type_id", False), ("serial_number", False), ("purchase_date", True), ("device_status", False)])
-        }
-
-        for table, (pk, fields) in schemas.items():
-            tab_view = GenericTableTab(self.db, table, pk, fields)
-            
-            # ADDED: Logic to prettify the tab titles so the UI doesn't look like raw SQL.
-            # E.g., 'device_types' becomes 'Device Types' in the UI.
-            pretty_tab_title = table.replace("_", " ").title()
-            self.tab_widget.addTab(tab_view, pretty_tab_title)
+            # [MODIFIED] Loop logic to parse JSON structure
+            for table_name, table_details in schema_data.items():
+                pk = table_details["primary_key"]
+                # Convert the JSON array of objects back into a list of tuples
+                fields = [(f["name"], f["is_date"]) for f in table_details["fields"]]
+                
+                tab_view = GenericTableTab(self.db, table_name, pk, fields)
+                pretty_tab_title = table_name.replace("_", " ").title()
+                self.tab_widget.addTab(tab_view, pretty_tab_title)
+                
+        except Exception as e:
+             QMessageBox.critical(self, "Configuration Error", f"Failed to load schema.json:\n{e}")
+             sys.exit(1)
 
 if __name__ == "__main__":
     import traceback 

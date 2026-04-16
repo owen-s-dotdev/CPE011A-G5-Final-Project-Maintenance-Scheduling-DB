@@ -1,24 +1,38 @@
 import mysql.connector
 from mysql.connector import Error
-
-# Database Configuration Variables
-DB_HOST = "127.0.0.1" # Using IP directly prevents IPv6 hanging
-DB_USER = "root"
-DB_PASS = ""
-DB_NAME = "maintenance_record_db"
+import json
+import os
 
 class DatabaseManager:
     def __init__(self):
         self.connection = None
+        self.load_config()
 
+    
+    # Read credentials from JSON
+    def load_config(self):
+        """Reads database credentials from the external config folder."""
+        config_path = os.path.join('config', 'config.json')
+        try:
+            with open(config_path, 'r') as file:
+                config_data = json.load(file)
+                self.db_host = config_data['database']['host']
+                self.db_user = config_data['database']['user']
+                self.db_pass = config_data['database']['password']
+                self.db_name = config_data['database']['name']
+        except FileNotFoundError:
+            raise Exception(f"Missing configuration file at {config_path}")
+        except json.JSONDecodeError:
+            raise Exception("Invalid JSON formatting in config.json")
+        
     def connect(self):
         """Establishes a connection to the MySQL database."""
         try:
             self.connection = mysql.connector.connect(
-                host=DB_HOST,
-                user=DB_USER,
-                password=DB_PASS,
-                database=DB_NAME,
+                host=self.db_host,       
+                user=self.db_user,      
+                password=self.db_pass,   
+                database=self.db_name,
                 connection_timeout=3, # Fails fast instead of hanging
                 use_pure=True
             )

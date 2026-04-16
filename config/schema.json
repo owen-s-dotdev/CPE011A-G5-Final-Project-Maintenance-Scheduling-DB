@@ -1,0 +1,44 @@
+{
+    "departments": {
+        "primary_key": "department_id",
+        "fields": [
+            {"name": "department_name", "is_date": false},
+            {"name": "department_location", "is_date": false}
+        ]
+    },
+    "technicians": {
+        "primary_key": "technician_id",
+        "fields": [
+            {"name": "first_name", "is_date": false},
+            {"name": "last_name", "is_date": false},
+            {"name": "contact_number", "is_date": false},
+            {"name": "email", "is_date": false}
+        ]
+    },
+    "device_types": {
+        "primary_key": "device_type_id",
+        "fields": [
+            {"name": "device_type_name", "is_date": false},
+            {"name": "department_id", "is_date": false}
+        ]
+    },
+    "maintenance_records": {
+        "primary_key": "maintenance_record_id",
+        "fields": [
+            {"name": "technician_id", "is_date": false},
+            {"name": "completion_date", "is_date": true},
+            {"name": "maintenance_notes", "is_date": false}
+        ]
+    },
+    "devices": {
+        "primary_key": "device_id",
+        "fields": [
+            {"name": "maintenance_record_id", "is_date": false},
+            {"name": "device_name", "is_date": false},
+            {"name": "device_type_id", "is_date": false},
+            {"name": "serial_number", "is_date": false},
+            {"name": "purchase_date", "is_date": true},
+            {"name": "device_status", "is_date": false}
+        ]
+    }
+}
