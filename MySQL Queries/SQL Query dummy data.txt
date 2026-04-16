@@ -1,0 +1,32 @@
+USE maintenance_record_db;
+
+-- 1. Populate Departments
+INSERT INTO departments (department_name, department_location) VALUES
+('IT Support', 'Building A, Room 101'),
+('Operations', 'Building A, Room 105'),
+('Human Resources', 'Building B, Floor 2');
+
+-- 2. Populate Technicians
+INSERT INTO technicians (first_name, last_name, contact_number, email) VALUES
+('Jane', 'Doe', '555-0199', 'jane.doe@company.com'),
+('John', 'Smith', '555-0200', 'john.smith@company.com');
+
+-- 3. Populate Device Types (Referencing Department IDs 1 and 2)
+INSERT INTO device_types (device_type_name, department_id) VALUES
+('Laptop', 1),
+('Network Printer', 2),
+('Server Blade', 1);
+
+-- 4. Populate Devices (Referencing Device Type IDs 1, 2, and 3)
+INSERT INTO devices (device_name, device_type_id, serial_number, purchase_date, device_status) VALUES
+('Dell Latitude 5520', 1, 'SN-998877', '2023-05-15', 'Active'),
+('HP ZBook Studio', 1, 'SN-554433', '2023-08-20', 'In Repair'),
+('Canon ImageRunner', 2, 'CN-112233', '2022-01-10', 'Active');
+
+-- 5. Populate Maintenance Records (Referencing Device IDs and Technician IDs)
+-- Includes multiple records for Device 1 to demonstrate historical logging
+INSERT INTO maintenance_records (device_id, technician_id, completion_date, maintenance_notes) VALUES
+(1, 1, '2024-10-25', 'Initial setup and software installation.'),
+(2, 2, '2024-11-02', 'Diagnosed faulty RAM module; ordered replacement.'),
+(3, 1, '2024-11-15', 'Monthly maintenance and firmware update.'),
+(1, 2, '2025-02-01', 'Annual hardware cleaning and secondary OS patch.');

@@ -1,0 +1,44 @@
+{
+    "departments": {
+        "primary_key": "department_id",
+        "fields": [
+            {"name": "department_name", "type": "text"},
+            {"name": "department_location", "type": "text"}
+        ]
+    },
+    "technicians": {
+        "primary_key": "technician_id",
+        "fields": [
+            {"name": "first_name", "type": "text"},
+            {"name": "last_name", "type": "text"},
+            {"name": "contact_number", "type": "text"},
+            {"name": "email", "type": "text"}
+        ]
+    },
+    "device_types": {
+        "primary_key": "device_type_id",
+        "fields": [
+            {"name": "device_type_name", "type": "text"},
+            {"name": "department_id", "type": "fk", "fk_table": "departments", "fk_id": "department_id", "fk_display": "department_name"}
+        ]
+    },
+    "maintenance_records": {
+        "primary_key": "maintenance_record_id",
+        "fields": [
+            {"name": "device_id", "type": "fk", "fk_table": "devices", "fk_id": "device_id", "fk_display": "device_name"},
+            {"name": "technician_id", "type": "fk", "fk_table": "technicians", "fk_id": "technician_id", "fk_display": "first_name"},
+            {"name": "completion_date", "type": "date"},
+            {"name": "maintenance_notes", "type": "text"}
+        ]
+    },
+    "devices": {
+        "primary_key": "device_id",
+        "fields": [
+            {"name": "device_name", "type": "text"},
+            {"name": "device_type_id", "type": "fk", "fk_table": "device_types", "fk_id": "device_type_id", "fk_display": "device_type_name"},
+            {"name": "serial_number", "type": "text"},
+            {"name": "purchase_date", "type": "date"},
+            {"name": "device_status", "type": "enum", "options": ["Active", "In Repair", "Decommissioned"]}
+        ]
+    }
+}

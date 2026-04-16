@@ -1,0 +1,51 @@
+-- 1. Initialize the Database
+DROP DATABASE IF EXISTS maintenance_record_db;
+CREATE DATABASE maintenance_record_db;
+USE maintenance_record_db;
+
+-- 2. Create Departments Table
+CREATE TABLE departments (
+    department_id INT AUTO_INCREMENT PRIMARY KEY,
+    department_name VARCHAR(100) NOT NULL,
+    department_location VARCHAR(100)
+);
+
+-- 3. Create Technicians Table
+CREATE TABLE technicians (
+    technician_id INT AUTO_INCREMENT PRIMARY KEY,
+    first_name VARCHAR(50) NOT NULL,
+    last_name VARCHAR(50) NOT NULL,
+    contact_number VARCHAR(20),
+    email VARCHAR(100)
+);
+
+-- 4. Create Device Types Table
+CREATE TABLE device_types (
+    device_type_id INT AUTO_INCREMENT PRIMARY KEY,
+    device_type_name VARCHAR(100) NOT NULL,
+    department_id INT,
+    FOREIGN KEY (department_id) REFERENCES departments(department_id) ON DELETE SET NULL
+);
+
+-- 5. Create Devices Table
+CREATE TABLE devices (
+    device_id INT AUTO_INCREMENT PRIMARY KEY,
+    device_name VARCHAR(100) NOT NULL,
+    device_type_id INT,
+    serial_number VARCHAR(100),
+    purchase_date DATE,
+    device_status VARCHAR(50),
+    FOREIGN KEY (device_type_id) REFERENCES device_types(device_type_id) ON DELETE SET NULL
+);
+
+-- 6. Create Maintenance Records Table
+-- This table now holds the device_id to allow for a chronological maintenance history
+CREATE TABLE maintenance_records (
+    maintenance_record_id INT AUTO_INCREMENT PRIMARY KEY,
+    device_id INT,
+    technician_id INT,
+    completion_date DATE,
+    maintenance_notes TEXT,
+    FOREIGN KEY (device_id) REFERENCES devices(device_id) ON DELETE CASCADE,
+    FOREIGN KEY (technician_id) REFERENCES technicians(technician_id) ON DELETE SET NULL
+);
