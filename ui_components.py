@@ -49,19 +49,6 @@ class GenericTableTab(QWidget):
             # -> Handle Smart Foreign Key Dropdowns
             elif field_type == "fk":
                 entry = QComboBox()
-                fk_table = field["fk_table"]
-                fk_id_col = field["fk_id"]
-                fk_display_col = field["fk_display"]
-                
-                try:
-                    records, columns = self.db.fetch_all(fk_table)
-                    id_idx = columns.index(fk_id_col)
-                    display_idx = columns.index(fk_display_col)
-                    for row in records:
-                        # Store the invisible ID as 'userData' but show the name
-                        entry.addItem(str(row[display_idx]), userData=row[id_idx])
-                except Exception as e:
-                    print(f"Failed to load FK data for {col_name}: {e}")
                     
             # -> Handle Standard Text
             else:
@@ -235,6 +222,9 @@ class GenericTableTab(QWidget):
         self.table_widget.setRowCount(0) 
         if hasattr(self, 'search_bar'):
             self.search_bar.clear()
+        
+        self.refresh_dropdowns()
+        
         try:
             records, columns = self.db.fetch_all(self.table_name)
             self.table_widget.setColumnCount(len(columns))
@@ -288,3 +278,42 @@ class GenericTableTab(QWidget):
                     entry_widget.setCurrentIndex(0)
             else:
                 entry_widget.clear()
+
+    # For live refreshing of data after updating related tables
+    def refresh_dropdowns(self):
+        """Re-fetches foreign key data and updates the dropdown menus dynamically."""
+        for field in self.input_fields:
+            if field.get("type") == "fk":
+                col_name = field["name"]
+                
+                # Safety check in case the widget isn't fully initialized yet
+                if col_name not in self.entries:
+                    continue
+                    
+                entry_widget, _ = self.entries[col_name]
+                
+                fk_table = field["fk_table"]
+                fk_id_col = field["fk_id"]
+                fk_display_col = field["fk_display"]
+                
+                # Remember what the user currently has selected
+                current_selection = entry_widget.currentData()
+                
+                entry_widget.clear() # Empty the old list
+                
+                try:
+                    records, columns = self.db.fetch_all(fk_table)
+                    id_idx = columns.index(fk_id_col)
+                    display_idx = columns.index(fk_display_col)
+                    
+                    for row in records:
+                        entry_widget.addItem(str(row[display_idx]), userData=row[id_idx])
+                        
+                    # Restore previous selection if it still exists
+                    if current_selection is not None:
+                        idx = entry_widget.findData(current_selection)
+                        if idx >= 0:
+                            entry_widget.setCurrentIndex(idx)
+                            
+                except Exception as e:
+                    print(f"Failed to refresh FK data for {col_name}: {e}")
