@@ -1,16 +1,17 @@
--- Create the database
-CREATE DATABASE IF NOT EXISTS maintenance_record_db;
+-- 1. Initialize the Database
+DROP DATABASE IF EXISTS maintenance_record_db;
+CREATE DATABASE maintenance_record_db;
 USE maintenance_record_db;
 
--- 1. Create departments Table
-CREATE TABLE IF NOT EXISTS departments (
+-- 2. Create Departments Table
+CREATE TABLE departments (
     department_id INT AUTO_INCREMENT PRIMARY KEY,
     department_name VARCHAR(100) NOT NULL,
     department_location VARCHAR(100)
 );
 
--- 2. Create technicians Table
-CREATE TABLE IF NOT EXISTS technicians (
+-- 3. Create Technicians Table
+CREATE TABLE technicians (
     technician_id INT AUTO_INCREMENT PRIMARY KEY,
     first_name VARCHAR(50) NOT NULL,
     last_name VARCHAR(50) NOT NULL,
@@ -18,32 +19,33 @@ CREATE TABLE IF NOT EXISTS technicians (
     email VARCHAR(100)
 );
 
--- 3. Create device_types Table
-CREATE TABLE IF NOT EXISTS device_types (
+-- 4. Create Device Types Table
+CREATE TABLE device_types (
     device_type_id INT AUTO_INCREMENT PRIMARY KEY,
     device_type_name VARCHAR(100) NOT NULL,
     department_id INT,
     FOREIGN KEY (department_id) REFERENCES departments(department_id) ON DELETE SET NULL
 );
 
--- 4. Create maintenance_records Table
-CREATE TABLE IF NOT EXISTS maintenance_records (
-    maintenance_record_id INT AUTO_INCREMENT PRIMARY KEY,
-    technician_id INT,
-    completion_date DATE,
-    maintenance_notes TEXT,
-    FOREIGN KEY (technician_id) REFERENCES technicians(technician_id) ON DELETE SET NULL
-);
-
--- 5. Create devices Table
-CREATE TABLE IF NOT EXISTS devices (
+-- 5. Create Devices Table
+CREATE TABLE devices (
     device_id INT AUTO_INCREMENT PRIMARY KEY,
-    maintenance_record_id INT,
     device_name VARCHAR(100) NOT NULL,
     device_type_id INT,
     serial_number VARCHAR(100),
     purchase_date DATE,
     device_status VARCHAR(50),
-    FOREIGN KEY (maintenance_record_id) REFERENCES maintenance_records(maintenance_record_id) ON DELETE SET NULL,
     FOREIGN KEY (device_type_id) REFERENCES device_types(device_type_id) ON DELETE SET NULL
+);
+
+-- 6. Create Maintenance Records Table
+-- This table now holds the device_id to allow for a chronological maintenance history
+CREATE TABLE maintenance_records (
+    maintenance_record_id INT AUTO_INCREMENT PRIMARY KEY,
+    device_id INT,
+    technician_id INT,
+    completion_date DATE,
+    maintenance_notes TEXT,
+    FOREIGN KEY (device_id) REFERENCES devices(device_id) ON DELETE CASCADE,
+    FOREIGN KEY (technician_id) REFERENCES technicians(technician_id) ON DELETE SET NULL
 );
