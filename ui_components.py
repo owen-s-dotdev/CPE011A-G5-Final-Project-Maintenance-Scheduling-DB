@@ -1,14 +1,11 @@
-import re
 import json
-from datetime import datetime
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem,
-    QMessageBox, QAbstractItemView, QHeaderView, QFileDialog
+    QMessageBox, QAbstractItemView, QHeaderView, QFileDialog,
+    QDateEdit, QComboBox # [ADDED] New Native Widgets
 )
-from PyQt6.QtCore import Qt
-
-# Separated the UI components into this file para hindi 400 lines yung main.py
+from PyQt6.QtCore import Qt, QDate # [ADDED] Native Date handlers
 
 class GenericTableTab(QWidget):
     """A reusable UI component for managing CRUD operations on any database table."""
@@ -31,16 +28,49 @@ class GenericTableTab(QWidget):
         row_idx = 0
         col_idx = 0
 
-        for col_name, is_date in self.input_fields:
+        # [MODIFIED BLOCK] Dynamic Widget Generation
+        for field in self.input_fields:
+            col_name = field["name"]
+            field_type = field.get("type", "text")
             lbl = QLabel(f"{col_name}:")
-            entry = QLineEdit()
-            if is_date:
-                entry.setPlaceholderText("YYYY-MM-DD")
+            
+            # -> Handle Date Calendars
+            if field_type == "date":
+                entry = QDateEdit()
+                entry.setCalendarPopup(True)
+                entry.setDisplayFormat("yyyy-MM-dd")
+                entry.setDate(QDate.currentDate())
+                
+            # -> Handle Static Dropdowns (Device Status)
+            elif field_type == "enum":
+                entry = QComboBox()
+                entry.addItems(field.get("options", []))
+                
+            # -> Handle Smart Foreign Key Dropdowns
+            elif field_type == "fk":
+                entry = QComboBox()
+                fk_table = field["fk_table"]
+                fk_id_col = field["fk_id"]
+                fk_display_col = field["fk_display"]
+                
+                try:
+                    records, columns = self.db.fetch_all(fk_table)
+                    id_idx = columns.index(fk_id_col)
+                    display_idx = columns.index(fk_display_col)
+                    for row in records:
+                        # Store the invisible ID as 'userData' but show the name
+                        entry.addItem(str(row[display_idx]), userData=row[id_idx])
+                except Exception as e:
+                    print(f"Failed to load FK data for {col_name}: {e}")
+                    
+            # -> Handle Standard Text
+            else:
+                entry = QLineEdit()
             
             form_layout.addWidget(lbl, row_idx, col_idx)
             form_layout.addWidget(entry, row_idx, col_idx + 1)
             
-            self.entries[col_name] = (entry, is_date)
+            self.entries[col_name] = (entry, field_type)
 
             col_idx += 2
             if col_idx > 3:  
@@ -49,7 +79,7 @@ class GenericTableTab(QWidget):
 
         main_layout.addLayout(form_layout)
 
-        # 2. Action Buttons (Horizontal Layout)
+        # 2. Action Buttons
         btn_layout = QHBoxLayout()
         
         self.btn_add = QPushButton("Add Record")
@@ -77,7 +107,7 @@ class GenericTableTab(QWidget):
 
         main_layout.addLayout(btn_layout)
 
-        # 3. Search Bar (Horizontal Layout)
+        # 3. Search Bar
         search_layout = QHBoxLayout()
         search_label = QLabel("Search:")
         
@@ -90,7 +120,7 @@ class GenericTableTab(QWidget):
         
         main_layout.addLayout(search_layout)
 
-        # 4. Data View (QTableWidget)
+        # 4. Data View 
         self.table_widget = QTableWidget()
         self.table_widget.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table_widget.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
@@ -100,11 +130,9 @@ class GenericTableTab(QWidget):
         main_layout.addWidget(self.table_widget)
     
     def export_to_json(self):
-        """Fetches current table data and saves it to a JSON file."""
         try:
             records, columns = self.db.fetch_all(self.table_name)
             data_to_export = []
-            
             for row in records:
                 row_dict = dict(zip(columns, row))
                 for key, value in row_dict.items():
@@ -112,23 +140,15 @@ class GenericTableTab(QWidget):
                         row_dict[key] = str(value)
                 data_to_export.append(row_dict)
 
-            file_path, _ = QFileDialog.getSaveFileName(
-                self, 
-                "Save JSON Backup", 
-                f"{self.table_name}_backup.json", 
-                "JSON Files (*.json)"
-            )
-
+            file_path, _ = QFileDialog.getSaveFileName(self, "Save JSON Backup", f"{self.table_name}_backup.json", "JSON Files (*.json)")
             if file_path:
                 with open(file_path, 'w') as json_file:
                     json.dump(data_to_export, json_file, indent=4)
                 QMessageBox.information(self, "Success", "Data exported successfully.")
-
         except Exception as e:
             QMessageBox.critical(self, "Export Error", f"Failed to export data:\n{e}")
 
     def filter_table(self, text):
-        """Dynamically filters the table rows based on the search query."""
         search_text = text.lower()
         for row in range(self.table_widget.rowCount()):
             row_visible = False
@@ -139,23 +159,29 @@ class GenericTableTab(QWidget):
                     break 
             self.table_widget.setRowHidden(row, not row_visible)
 
+    # [MODIFIED BLOCK] Native Validation logic
     def validate_inputs(self):
         columns = []
         values = []
-        for col_name, (entry_widget, is_date) in self.entries.items():
-            val = entry_widget.text().strip()
-            if not val:
-                QMessageBox.warning(self, "Validation Error", f"Field '{col_name}' cannot be empty.")
-                return None, None
-            if is_date:
-                if not re.match(r"^\d{4}-\d{2}-\d{2}$", val):
-                    QMessageBox.warning(self, "Validation Error", f"Date in '{col_name}' must be YYYY-MM-DD.")
+        for col_name, (entry_widget, field_type) in self.entries.items():
+            
+            # Fetch safely based on widget type
+            if field_type == "date":
+                val = entry_widget.date().toString("yyyy-MM-dd")
+            elif field_type == "enum":
+                val = entry_widget.currentText()
+            elif field_type == "fk":
+                val = entry_widget.currentData()
+                if val is None:
+                    QMessageBox.warning(self, "Validation Error", f"Please select a valid option for '{col_name}'.")
                     return None, None
-                try:
-                    datetime.strptime(val, "%Y-%m-%d")
-                except ValueError:
-                    QMessageBox.warning(self, "Validation Error", f"Invalid date provided in '{col_name}'.")
+                val = str(val)
+            else:
+                val = entry_widget.text().strip()
+                if not val:
+                    QMessageBox.warning(self, "Validation Error", f"Field '{col_name}' cannot be empty.")
                     return None, None
+                    
             columns.append(col_name)
             values.append(val)
         return columns, values
@@ -195,9 +221,7 @@ class GenericTableTab(QWidget):
             return
         row_idx = selected_items[0].row()
         pk_val = self.table_widget.item(row_idx, 0).text()
-        reply = QMessageBox.question(self, "Confirm Delete", 
-                                     "Are you sure you want to delete this record?",
-                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        reply = QMessageBox.question(self, "Confirm Delete", "Are you sure you want to delete this record?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
             try:
                 self.db.delete_record(self.table_name, self.pk_column, pk_val)
@@ -227,19 +251,40 @@ class GenericTableTab(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Database Error", f"Failed to load data for {self.table_name}:\n{e}")
 
+    # [MODIFIED BLOCK] Apply table row data to the corresponding native widgets
     def on_row_select(self):
         selected_items = self.table_widget.selectedItems()
         if not selected_items: return
         row_idx = selected_items[0].row()
         self.clear_form()
         col_count = self.table_widget.columnCount()
+        
         for i in range(1, col_count):
             col_name = self.table_widget.horizontalHeaderItem(i).text()
             if col_name in self.entries:
                 cell_value = self.table_widget.item(row_idx, i).text()
-                entry_widget = self.entries[col_name][0]
-                entry_widget.setText(cell_value)
+                entry_widget, field_type = self.entries[col_name]
+                
+                if field_type == "date":
+                    if cell_value:
+                        entry_widget.setDate(QDate.fromString(cell_value, "yyyy-MM-dd"))
+                elif field_type == "enum":
+                    entry_widget.setCurrentText(cell_value)
+                elif field_type == "fk":
+                    if cell_value.isdigit():
+                        idx = entry_widget.findData(int(cell_value))
+                        if idx >= 0:
+                            entry_widget.setCurrentIndex(idx)
+                else:
+                    entry_widget.setText(cell_value)
 
+    # [MODIFIED BLOCK] Clear safely based on widget type
     def clear_form(self):
-        for entry_widget, _ in self.entries.values():
-            entry_widget.clear()
+        for entry_widget, field_type in self.entries.values():
+            if field_type == "date":
+                entry_widget.setDate(QDate.currentDate())
+            elif field_type in ["enum", "fk"]:
+                if entry_widget.count() > 0:
+                    entry_widget.setCurrentIndex(0)
+            else:
+                entry_widget.clear()

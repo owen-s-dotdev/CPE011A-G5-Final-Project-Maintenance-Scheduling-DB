@@ -52,7 +52,7 @@ class MainApp(QMainWindow):
         else:
             print("Database connected successfully! Launching UI...", flush=True) 
             self.setup_ui()
-
+    
     def setup_ui(self):
         self.tab_widget = QTabWidget()
         self.setCentralWidget(self.tab_widget)
@@ -62,11 +62,11 @@ class MainApp(QMainWindow):
             with open(schema_path, 'r') as file:
                 schema_data = json.load(file)
 
-            # [MODIFIED] Loop logic to parse JSON structure
             for table_name, table_details in schema_data.items():
                 pk = table_details["primary_key"]
-                # Convert the JSON array of objects back into a list of tuples
-                fields = [(f["name"], f["is_date"]) for f in table_details["fields"]]
+                
+                
+                fields = table_details["fields"]
                 
                 tab_view = GenericTableTab(self.db, table_name, pk, fields)
                 pretty_tab_title = table_name.replace("_", " ").title()
