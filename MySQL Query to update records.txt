@@ -1,0 +1,46 @@
+USE maintenance_record_db;
+
+-- 1. Rename Tables to Plural and Underscore Case
+RENAME TABLE Technician TO technicians;
+RENAME TABLE MaintenanceRecord TO maintenance_records;
+RENAME TABLE Departments TO departments;
+RENAME TABLE DeviceTypes TO device_types;
+RENAME TABLE Devices TO devices;
+
+-- 2. Modify 'departments' Table
+ALTER TABLE departments
+    RENAME COLUMN DepartmentID TO department_id,
+    RENAME COLUMN DepartmentName TO department_name,
+    RENAME COLUMN Location TO location;
+
+-- 3. Modify 'technicians' Table
+ALTER TABLE technicians
+    RENAME COLUMN TechnicianID TO technician_id,
+    RENAME COLUMN FirstName TO first_name,
+    RENAME COLUMN LastName TO last_name,
+    RENAME COLUMN ContactNumber TO contact_number,
+    RENAME COLUMN Email TO email;
+
+-- 4. Modify 'device_types' Table
+ALTER TABLE device_types
+    RENAME COLUMN DeviceTypeID TO device_type_id,
+    RENAME COLUMN TypeName TO type_name,
+    RENAME COLUMN DepartmentID TO department_id;
+
+-- 5. Modify 'maintenance_records' Table
+-- Expanding 'RecordID' to full name 'maintenance_record_id'
+ALTER TABLE maintenance_records
+    RENAME COLUMN RecordID TO maintenance_record_id,
+    RENAME COLUMN TechnicianID TO technician_id,
+    RENAME COLUMN CompletionDate TO completion_date,
+    RENAME COLUMN Notes TO notes;
+
+-- 6. Modify 'devices' Table
+ALTER TABLE devices
+    RENAME COLUMN DeviceID TO device_id,
+    RENAME COLUMN RecordID TO maintenance_record_id,
+    RENAME COLUMN DeviceName TO device_name,
+    RENAME COLUMN DeviceTypeID TO device_type_id,
+    RENAME COLUMN SerialNumber TO serial_number,
+    RENAME COLUMN PurchaseDate TO purchase_date,
+    RENAME COLUMN Status TO status;

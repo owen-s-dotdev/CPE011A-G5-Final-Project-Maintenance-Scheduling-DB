@@ -240,17 +240,24 @@ class MainApp(QMainWindow):
         self.tab_widget = QTabWidget()
         self.setCentralWidget(self.tab_widget)
 
+        # MODIFIED BLOCK: The schemas dictionary has been completely 
+        # rewritten to align with the new MySQL Database standards.
+
         schemas = {
-            "Departments": ("DepartmentID", [("DepartmentName", False), ("Location", False)]),
-            "Technician": ("TechnicianID", [("FirstName", False), ("LastName", False), ("ContactNumber", False), ("Email", False)]),
-            "DeviceTypes": ("DeviceTypeID", [("TypeName", False), ("DepartmentID", False)]),
-            "MaintenanceRecord": ("RecordID", [("TechnicianID", False), ("CompletionDate", True), ("Notes", False)]),
-            "Devices": ("DeviceID", [("RecordID", False), ("DeviceName", False), ("DeviceTypeID", False), ("SerialNumber", False), ("PurchaseDate", True), ("Status", False)])
+            "departments": ("department_id", [("department_name", False), ("department_location", False)]),
+            "technicians": ("technician_id", [("first_name", False), ("last_name", False), ("contact_number", False), ("email", False)]),
+            "device_types": ("device_type_id", [("device_type_name", False), ("department_id", False)]),
+            "maintenance_records": ("maintenance_record_id", [("technician_id", False), ("completion_date", True), ("maintenance_notes", False)]),
+            "devices": ("device_id", [("maintenance_record_id", False), ("device_name", False), ("device_type_id", False), ("serial_number", False), ("purchase_date", True), ("device_status", False)])
         }
 
         for table, (pk, fields) in schemas.items():
             tab_view = GenericTableTab(self.db, table, pk, fields)
-            self.tab_widget.addTab(tab_view, table)
+            
+            # ADDED: Logic to prettify the tab titles so the UI doesn't look like raw SQL.
+            # E.g., 'device_types' becomes 'Device Types' in the UI.
+            pretty_tab_title = table.replace("_", " ").title()
+            self.tab_widget.addTab(tab_view, pretty_tab_title)
 
 if __name__ == "__main__":
     import traceback 
