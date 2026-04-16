@@ -72,7 +72,20 @@ class GenericTableTab(QWidget):
 
         main_layout.addLayout(btn_layout)
 
-        # 3. Data View (QTableWidget)
+        # 3. Search Bar (Horizontal Layout)
+        search_layout = QHBoxLayout()
+        search_label = QLabel("Search:")
+        
+        self.search_bar = QLineEdit()
+        self.search_bar.setPlaceholderText("Type to filter records dynamically...")
+        self.search_bar.textChanged.connect(self.filter_table)
+        
+        search_layout.addWidget(search_label)
+        search_layout.addWidget(self.search_bar)
+        
+        main_layout.addLayout(search_layout)
+
+        # 4. Data View (QTableWidget)
         self.table_widget = QTableWidget()
         self.table_widget.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table_widget.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
@@ -81,6 +94,24 @@ class GenericTableTab(QWidget):
         
         # FIX: Removed the stretch code from here so it doesn't crash on an empty table!
         main_layout.addWidget(self.table_widget)
+    
+    def filter_table(self, text):
+        """Dynamically filters the table rows based on the search query."""
+        search_text = text.lower()
+        
+        # Iterate through every row in the table
+        for row in range(self.table_widget.rowCount()):
+            row_visible = False
+            
+            # Check every column in the current row
+            for col in range(self.table_widget.columnCount()):
+                item = self.table_widget.item(row, col)
+                if item and search_text in item.text().lower():
+                    row_visible = True
+                    break # Stop checking columns if a match is found
+            
+            # Hide the row if the text was not found in any column
+            self.table_widget.setRowHidden(row, not row_visible)
 
     def validate_inputs(self):
         columns = []
@@ -167,6 +198,10 @@ class GenericTableTab(QWidget):
     def load_data(self):
         self.table_widget.setRowCount(0) 
         
+        # Clear the search bar when data reloads
+        if hasattr(self, 'search_bar'):
+            self.search_bar.clear()
+
         try:
             records, columns = self.db.fetch_all(self.table_name)
             

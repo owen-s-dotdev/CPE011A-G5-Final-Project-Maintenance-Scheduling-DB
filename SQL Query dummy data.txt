@@ -1,0 +1,39 @@
+USE maintenance_record_db;
+
+-- 1. Insert into 'departments'
+INSERT INTO departments (department_name, department_location) VALUES
+('IT Support', 'Building A, Room 101'),
+('Human Resources', 'Building B, Floor 2'),
+('Operations', 'Building A, Room 105'),
+('Executive Suite', 'Building C, Penthouse');
+
+-- 2. Insert into 'technicians'
+INSERT INTO technicians (first_name, last_name, contact_number, email) VALUES
+('Jane', 'Doe', '555-0199', 'jane.doe@company.com'),
+('John', 'Smith', '555-0200', 'john.smith@company.com'),
+('Alice', 'Johnson', '555-0201', 'alice.j@company.com');
+
+-- 3. Insert into 'device_types'
+-- Assuming Department IDs match the order above (1=IT, 2=HR, 3=Ops, 4=Exec)
+INSERT INTO device_types (device_type_name, department_id) VALUES
+('Laptop', 1),
+('Desktop Workstation', 1),
+('Network Printer', 3),
+('Server Blade', 1);
+
+-- 4. Insert into 'maintenance_records'
+-- Assuming Technician IDs match the order above (1=Jane, 2=John, 3=Alice)
+INSERT INTO maintenance_records (technician_id, completion_date, maintenance_notes) VALUES
+(1, '2023-10-25', 'Routine system update and dust removal.'),
+(2, '2023-11-02', 'Replaced faulty RAM module.'),
+(3, '2023-11-15', 'Configured network settings and installed drivers.'),
+(1, '2023-12-01', 'Annual hardware inspection completed.');
+
+-- 5. Insert into 'devices'
+-- Assuming Record IDs and Device Type IDs match the inserts above
+INSERT INTO devices (maintenance_record_id, device_name, device_type_id, serial_number, purchase_date, device_status) VALUES
+(1, 'Dell Latitude 5520', 1, 'SN-998877', '2022-05-15', 'Active'),
+(2, 'HP ZBook Studio', 1, 'SN-554433', '2021-08-20', 'In Repair'),
+(3, 'Canon ImageRunner', 3, 'CN-112233', '2020-01-10', 'Active'),
+(4, 'Dell PowerEdge R740', 4, 'SN-778899', '2019-11-05', 'Active'),
+(1, 'Lenovo ThinkPad X1', 1, 'SN-334455', '2023-02-28', 'Active');
