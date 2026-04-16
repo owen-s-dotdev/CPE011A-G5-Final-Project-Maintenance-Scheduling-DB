@@ -1,0 +1,591 @@
+config.json
+{
+    "database": {
+        "host": "127.0.0.1",
+        "user": "root",
+        "password": "",
+        "name": "maintenance_record_db"
+    }
+}
+
+schema.json
+
+{
+    "departments": {
+        "primary_key": "department_id",
+        "fields": [
+            {"name": "department_name", "type": "text"},
+            {"name": "department_location", "type": "text"}
+        ]
+    },
+    "technicians": {
+        "primary_key": "technician_id",
+        "fields": [
+            {"name": "first_name", "type": "text"},
+            {"name": "last_name", "type": "text"},
+            {"name": "contact_number", "type": "text"},
+            {"name": "email", "type": "text"}
+        ]
+    },
+    "device_types": {
+        "primary_key": "device_type_id",
+        "fields": [
+            {"name": "device_type_name", "type": "text"},
+            {"name": "department_id", "type": "fk", "fk_table": "departments", "fk_id": "department_id", "fk_display": "department_name"}
+        ]
+    },
+    "maintenance_records": {
+        "primary_key": "maintenance_record_id",
+        "fields": [
+            {"name": "device_id", "type": "fk", "fk_table": "devices", "fk_id": "device_id", "fk_display": "device_name"},
+            {"name": "technician_id", "type": "fk", "fk_table": "technicians", "fk_id": "technician_id", "fk_display": "first_name"},
+            {"name": "completion_date", "type": "date"},
+            {"name": "maintenance_notes", "type": "text"}
+        ]
+    },
+    "devices": {
+        "primary_key": "device_id",
+        "fields": [
+            {"name": "device_name", "type": "text"},
+            {"name": "device_type_id", "type": "fk", "fk_table": "device_types", "fk_id": "device_type_id", "fk_display": "device_type_name"},
+            {"name": "serial_number", "type": "text"},
+            {"name": "purchase_date", "type": "date"},
+            {"name": "device_status", "type": "enum", "options": ["Active", "In Repair", "Decommissioned"]}
+        ]
+    }
+}
+
+settings.json
+
+{
+    "window": {
+        "width": 1050,
+        "height": 700,
+        "theme": "Fusion"
+    }
+}
+
+db_manager.py 
+import mysql.connector
+from mysql.connector import Error
+import json
+import os
+
+# Removed cursor.close() calls since we're now using 'with' context managers which handle that automatically.
+
+class DatabaseManager:
+    def __init__(self):
+        self.connection = None
+        self.load_config()
+
+    def load_config(self):
+        """Reads database credentials from the external config folder."""
+        config_path = os.path.join('config', 'config.json')
+        try:
+            with open(config_path, 'r') as file:
+                config_data = json.load(file)
+                self.db_host = config_data['database']['host']
+                self.db_user = config_data['database']['user']
+                self.db_pass = config_data['database']['password']
+                self.db_name = config_data['database']['name']
+        except FileNotFoundError:
+            raise Exception(f"Missing configuration file at {config_path}")
+        except json.JSONDecodeError:
+            raise Exception("Invalid JSON formatting in config.json")
+        
+    def connect(self):
+        """Establishes a connection to the MySQL database."""
+        try:
+            self.connection = mysql.connector.connect(
+                host=self.db_host,       
+                user=self.db_user,      
+                password=self.db_pass,   
+                database=self.db_name,
+                connection_timeout=3, 
+                use_pure=True
+            )
+            return True, "Connection successful."
+        
+        except Exception as e:
+            print(f"\n--- DATABASE CRASH LOG ---")
+            print(f"Reason: {e}")
+            print(f"--------------------------\n")
+            return False, str(e)
+
+    def disconnect(self):
+        """Closes the database connection."""
+        if self.connection and self.connection.is_connected():
+            self.connection.close()
+
+    def fetch_all(self, table_name):
+        """Retrieves all records from a specified table."""
+        try:
+            # Added 'with' context manager
+            with self.connection.cursor() as cursor:
+                cursor.execute(f"SELECT * FROM {table_name}")
+                records = cursor.fetchall()
+                columns = [desc[0] for desc in cursor.description]
+                return records, columns
+            
+        except Error as e:
+            raise e
+
+    def insert_record(self, table_name, columns, values):
+        """Inserts a new record using parameterized queries."""
+        placeholders = ", ".join(["%s"] * len(values))
+        col_str = ", ".join(columns)
+        query = f"INSERT INTO {table_name} ({col_str}) VALUES ({placeholders})"
+        try:
+            # Added 'with' context manager
+            with self.connection.cursor() as cursor:
+                cursor.execute(query, values)
+                self.connection.commit()
+            
+        except Error as e:
+            self.connection.rollback()
+            raise e
+
+    def update_record(self, table_name, pk_col, pk_val, columns, values):
+        """Updates an existing record using parameterized queries."""
+        set_str = ", ".join([f"{col} = %s" for col in columns])
+        query = f"UPDATE {table_name} SET {set_str} WHERE {pk_col} = %s"
+        try:
+            # Added 'with' context manager
+            with self.connection.cursor() as cursor:
+                cursor.execute(query, values + [pk_val])
+                self.connection.commit()
+
+        except Error as e:
+            self.connection.rollback()
+            raise e
+
+    def delete_record(self, table_name, pk_col, pk_val):
+        """Deletes a record based on its primary key."""
+        query = f"DELETE FROM {table_name} WHERE {pk_col} = %s"
+        try:
+            
+            with self.connection.cursor() as cursor:
+                cursor.execute(query, (pk_val,))
+                self.connection.commit()
+            
+        except Error as e:
+            self.connection.rollback()
+            raise e
+
+
+ui_components.py
+import json
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
+    QLabel, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem,
+    QMessageBox, QAbstractItemView, QHeaderView, QFileDialog,
+    QDateEdit, QComboBox # [ADDED] New Native Widgets
+)
+from PyQt6.QtCore import Qt, QDate # [ADDED] Native Date handlers
+
+class GenericTableTab(QWidget):
+    """A reusable UI component for managing CRUD operations on any database table."""
+    def __init__(self, db_manager, table_name, pk_column, input_fields):
+        super().__init__()
+        self.db = db_manager
+        self.table_name = table_name
+        self.pk_column = pk_column
+        self.input_fields = input_fields 
+        self.entries = {}
+
+        self.setup_ui()
+        self.load_data()
+
+    def setup_ui(self):
+        main_layout = QVBoxLayout(self)
+
+        # 1. Data Entry Form (Grid Layout)
+        form_layout = QGridLayout()
+        row_idx = 0
+        col_idx = 0
+
+        # [MODIFIED BLOCK] Dynamic Widget Generation
+        for field in self.input_fields:
+            col_name = field["name"]
+            field_type = field.get("type", "text")
+            lbl = QLabel(f"{col_name}:")
+            
+            # -> Handle Date Calendars
+            if field_type == "date":
+                entry = QDateEdit()
+                entry.setCalendarPopup(True)
+                entry.setDisplayFormat("yyyy-MM-dd")
+                entry.setDate(QDate.currentDate())
+                
+            # -> Handle Static Dropdowns (Device Status)
+            elif field_type == "enum":
+                entry = QComboBox()
+                entry.addItems(field.get("options", []))
+                
+            # -> Handle Smart Foreign Key Dropdowns
+            elif field_type == "fk":
+                entry = QComboBox()
+                    
+            # -> Handle Standard Text
+            else:
+                entry = QLineEdit()
+            
+            form_layout.addWidget(lbl, row_idx, col_idx)
+            form_layout.addWidget(entry, row_idx, col_idx + 1)
+            
+            self.entries[col_name] = (entry, field_type)
+
+            col_idx += 2
+            if col_idx > 3:  
+                col_idx = 0
+                row_idx += 1
+
+        main_layout.addLayout(form_layout)
+
+        # 2. Action Buttons
+        btn_layout = QHBoxLayout()
+        
+        self.btn_add = QPushButton("Add Record")
+        self.btn_add.clicked.connect(self.add_record)
+        btn_layout.addWidget(self.btn_add)
+
+        self.btn_update = QPushButton("Update Selected")
+        self.btn_update.clicked.connect(self.update_record)
+        btn_layout.addWidget(self.btn_update)
+
+        self.btn_delete = QPushButton("Delete Selected")
+        self.btn_delete.setStyleSheet("background-color: darkred; color: white;")
+        self.btn_delete.clicked.connect(self.delete_record)
+        btn_layout.addWidget(self.btn_delete)
+
+        btn_layout.addStretch() 
+
+        self.btn_export = QPushButton("Export to JSON")
+        self.btn_export.clicked.connect(self.export_to_json)
+        btn_layout.addWidget(self.btn_export)
+
+        self.btn_refresh = QPushButton("Refresh")
+        self.btn_refresh.clicked.connect(self.load_data)
+        btn_layout.addWidget(self.btn_refresh)
+
+        main_layout.addLayout(btn_layout)
+
+        # 3. Search Bar
+        search_layout = QHBoxLayout()
+        search_label = QLabel("Search:")
+        
+        self.search_bar = QLineEdit()
+        self.search_bar.setPlaceholderText("Type to filter records dynamically...")
+        self.search_bar.textChanged.connect(self.filter_table)
+        
+        search_layout.addWidget(search_label)
+        search_layout.addWidget(self.search_bar)
+        
+        main_layout.addLayout(search_layout)
+
+        # 4. Data View 
+        self.table_widget = QTableWidget()
+        self.table_widget.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table_widget.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.table_widget.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers) 
+        self.table_widget.itemSelectionChanged.connect(self.on_row_select)
+        
+        main_layout.addWidget(self.table_widget)
+    
+    def export_to_json(self):
+        try:
+            records, columns = self.db.fetch_all(self.table_name)
+            data_to_export = []
+            for row in records:
+                row_dict = dict(zip(columns, row))
+                for key, value in row_dict.items():
+                    if value is not None:
+                        row_dict[key] = str(value)
+                data_to_export.append(row_dict)
+
+            file_path, _ = QFileDialog.getSaveFileName(self, "Save JSON Backup", f"{self.table_name}_backup.json", "JSON Files (*.json)")
+            if file_path:
+                with open(file_path, 'w') as json_file:
+                    json.dump(data_to_export, json_file, indent=4)
+                QMessageBox.information(self, "Success", "Data exported successfully.")
+        except Exception as e:
+            QMessageBox.critical(self, "Export Error", f"Failed to export data:\n{e}")
+
+    def filter_table(self, text):
+        search_text = text.lower()
+        for row in range(self.table_widget.rowCount()):
+            row_visible = False
+            for col in range(self.table_widget.columnCount()):
+                item = self.table_widget.item(row, col)
+                if item and search_text in item.text().lower():
+                    row_visible = True
+                    break 
+            self.table_widget.setRowHidden(row, not row_visible)
+
+    # [MODIFIED BLOCK] Native Validation logic
+    def validate_inputs(self):
+        columns = []
+        values = []
+        for col_name, (entry_widget, field_type) in self.entries.items():
+            
+            # Fetch safely based on widget type
+            if field_type == "date":
+                val = entry_widget.date().toString("yyyy-MM-dd")
+            elif field_type == "enum":
+                val = entry_widget.currentText()
+            elif field_type == "fk":
+                val = entry_widget.currentData()
+                if val is None:
+                    QMessageBox.warning(self, "Validation Error", f"Please select a valid option for '{col_name}'.")
+                    return None, None
+                val = str(val)
+            else:
+                val = entry_widget.text().strip()
+                if not val:
+                    QMessageBox.warning(self, "Validation Error", f"Field '{col_name}' cannot be empty.")
+                    return None, None
+                    
+            columns.append(col_name)
+            values.append(val)
+        return columns, values
+
+    def add_record(self):
+        columns, values = self.validate_inputs()
+        if not columns: return
+        try:
+            self.db.insert_record(self.table_name, columns, values)
+            QMessageBox.information(self, "Success", "Record added successfully.")
+            self.clear_form()
+            self.load_data()
+        except Exception as e:
+            QMessageBox.critical(self, "Database Error", f"Failed to add record:\n{e}")
+
+    def update_record(self):
+        selected_items = self.table_widget.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "Selection Error", "Please select a record from the table to update.")
+            return
+        row_idx = selected_items[0].row()
+        pk_val = self.table_widget.item(row_idx, 0).text()
+        columns, values = self.validate_inputs()
+        if not columns: return
+        try:
+            self.db.update_record(self.table_name, self.pk_column, pk_val, columns, values)
+            QMessageBox.information(self, "Success", "Record updated successfully.")
+            self.clear_form()
+            self.load_data()
+        except Exception as e:
+            QMessageBox.critical(self, "Database Error", f"Failed to update record:\n{e}")
+
+    def delete_record(self):
+        selected_items = self.table_widget.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "Selection Error", "Please select a record from the table to delete.")
+            return
+        row_idx = selected_items[0].row()
+        pk_val = self.table_widget.item(row_idx, 0).text()
+        reply = QMessageBox.question(self, "Confirm Delete", "Are you sure you want to delete this record?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                self.db.delete_record(self.table_name, self.pk_column, pk_val)
+                QMessageBox.information(self, "Success", "Record deleted successfully.")
+                self.clear_form()
+                self.load_data()
+            except Exception as e:
+                QMessageBox.critical(self, "Database Error", f"Failed to delete record:\n{e}")
+
+    def load_data(self):
+        self.table_widget.setRowCount(0) 
+        if hasattr(self, 'search_bar'):
+            self.search_bar.clear()
+        
+        self.refresh_dropdowns()
+        
+        try:
+            records, columns = self.db.fetch_all(self.table_name)
+            self.table_widget.setColumnCount(len(columns))
+            self.table_widget.setHorizontalHeaderLabels(columns)
+            header = self.table_widget.horizontalHeader()
+            header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+            for row_idx, row_data in enumerate(records):
+                self.table_widget.insertRow(row_idx)
+                for col_idx, cell_data in enumerate(row_data):
+                    display_text = str(cell_data) if cell_data is not None else ""
+                    item = QTableWidgetItem(display_text)
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                    self.table_widget.setItem(row_idx, col_idx, item)
+        except Exception as e:
+            QMessageBox.critical(self, "Database Error", f"Failed to load data for {self.table_name}:\n{e}")
+
+    # [MODIFIED BLOCK] Apply table row data to the corresponding native widgets
+    def on_row_select(self):
+        selected_items = self.table_widget.selectedItems()
+        if not selected_items: return
+        row_idx = selected_items[0].row()
+        self.clear_form()
+        col_count = self.table_widget.columnCount()
+        
+        for i in range(1, col_count):
+            col_name = self.table_widget.horizontalHeaderItem(i).text()
+            if col_name in self.entries:
+                cell_value = self.table_widget.item(row_idx, i).text()
+                entry_widget, field_type = self.entries[col_name]
+                
+                if field_type == "date":
+                    if cell_value:
+                        entry_widget.setDate(QDate.fromString(cell_value, "yyyy-MM-dd"))
+                elif field_type == "enum":
+                    entry_widget.setCurrentText(cell_value)
+                elif field_type == "fk":
+                    if cell_value.isdigit():
+                        idx = entry_widget.findData(int(cell_value))
+                        if idx >= 0:
+                            entry_widget.setCurrentIndex(idx)
+                else:
+                    entry_widget.setText(cell_value)
+
+    # [MODIFIED BLOCK] Clear safely based on widget type
+    def clear_form(self):
+        for entry_widget, field_type in self.entries.values():
+            if field_type == "date":
+                entry_widget.setDate(QDate.currentDate())
+            elif field_type in ["enum", "fk"]:
+                if entry_widget.count() > 0:
+                    entry_widget.setCurrentIndex(0)
+            else:
+                entry_widget.clear()
+
+    # For live refreshing of data after updating related tables
+    def refresh_dropdowns(self):
+        """Re-fetches foreign key data and updates the dropdown menus dynamically."""
+        for field in self.input_fields:
+            if field.get("type") == "fk":
+                col_name = field["name"]
+                
+                # Safety check in case the widget isn't fully initialized yet
+                if col_name not in self.entries:
+                    continue
+                    
+                entry_widget, _ = self.entries[col_name]
+                
+                fk_table = field["fk_table"]
+                fk_id_col = field["fk_id"]
+                fk_display_col = field["fk_display"]
+                
+                # Remember what the user currently has selected
+                current_selection = entry_widget.currentData()
+                
+                entry_widget.clear() # Empty the old list
+                
+                try:
+                    records, columns = self.db.fetch_all(fk_table)
+                    id_idx = columns.index(fk_id_col)
+                    display_idx = columns.index(fk_display_col)
+                    
+                    for row in records:
+                        entry_widget.addItem(str(row[display_idx]), userData=row[id_idx])
+                        
+                    # Restore previous selection if it still exists
+                    if current_selection is not None:
+                        idx = entry_widget.findData(current_selection)
+                        if idx >= 0:
+                            entry_widget.setCurrentIndex(idx)
+                            
+                except Exception as e:
+                    print(f"Failed to refresh FK data for {col_name}: {e}")
+
+
+main.py 
+
+
+import sys
+import re
+import os
+import json
+from datetime import datetime
+from PyQt6.QtWidgets import (
+    QApplication, QMainWindow,QTabWidget, QMessageBox
+)
+from PyQt6.QtCore import Qt
+from db_manager import DatabaseManager
+from ui_components import GenericTableTab
+
+# Main application window
+
+class MainApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Maintenance Record Management System (PyQt6)")
+        # self.resize(900, 600)
+        self.load_settings()
+
+        self.db = DatabaseManager()
+        self.check_database_connection()
+    
+    # Method to load the settings.json
+    def load_settings(self):
+        """Loads window settings from the external JSON file."""
+        settings_path = os.path.join('config', 'settings.json')
+        try:
+            with open(settings_path, 'r') as file:
+                settings_data = json.load(file)
+                width = settings_data['window']['width']
+                height = settings_data['window']['height']
+                # Apply JSON settings
+                self.resize(width, height)
+        except Exception as e:
+            print(f"Warning: Failed to load settings.json. Using defaults. Error: {e}")
+            self.resize(900, 600) # Default fallback
+    
+    def check_database_connection(self):
+        print("Attempting to connect to the database...", flush=True) 
+        
+        success, message = self.db.connect()
+        
+        if not success:
+            print(f"\nCRITICAL ERROR: Database Connection Failed!", flush=True)
+            print(f"Details: {message}\n", flush=True)
+            
+            QMessageBox.critical(self, "Database Connection Failed", 
+                                 f"Could not connect to MySQL server.\nPlease check credentials and ensure the server is running.\n\nError: {message}")
+            sys.exit(1) 
+        else:
+            print("Database connected successfully! Launching UI...", flush=True) 
+            self.setup_ui()
+    
+    def setup_ui(self):
+        self.tab_widget = QTabWidget()
+        self.setCentralWidget(self.tab_widget)
+
+        schema_path = os.path.join('config', 'schema.json')
+        try:
+            with open(schema_path, 'r') as file:
+                schema_data = json.load(file)
+
+            for table_name, table_details in schema_data.items():
+                pk = table_details["primary_key"]
+                
+                
+                fields = table_details["fields"]
+                
+                tab_view = GenericTableTab(self.db, table_name, pk, fields)
+                pretty_tab_title = table_name.replace("_", " ").title()
+                self.tab_widget.addTab(tab_view, pretty_tab_title)
+                
+        except Exception as e:
+             QMessageBox.critical(self, "Configuration Error", f"Failed to load schema.json:\n{e}")
+             sys.exit(1)
+
+if __name__ == "__main__":
+    import traceback 
+    
+    try:
+        app = QApplication(sys.argv)
+        app.setStyle("Fusion")
+        window = MainApp()
+        window.show()
+        sys.exit(app.exec())
+    except Exception as e:
+        print("\n--- FATAL PYQT CRASH ---", flush=True)
+        traceback.print_exc() 
+        print("------------------------\n", flush=True)
